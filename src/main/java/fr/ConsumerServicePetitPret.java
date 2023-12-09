@@ -8,12 +8,8 @@ import jakarta.inject.Inject;
 import jakarta.jms.*;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import java.util.Random;
-
-
 @ApplicationScoped
-public class ProducerFacturation implements Runnable {
-
+public class ConsumerServicePetitPret implements Runnable {
 
 	@Inject
 	ConnectionFactory connectionFactory;
@@ -21,16 +17,12 @@ public class ProducerFacturation implements Runnable {
 	@ConfigProperty(name = "quarkus.artemis.username")
 	String userName;
 
-	//indique si la classe est configurée pour recevoir les messages en boucle
 	boolean running;
-	Random random = new Random();
 
-	//cette méthode démarre un nouveau thread exécutant l'instance en cours, jusqu'à ce que la variable running soit false.
 	void onStart(@Observes StartupEvent ev) {
 		running = true;
 		new Thread(this).start();
 	}
-
 
 	void onStop(@Observes ShutdownEvent ev) {
 		running = false;
@@ -40,18 +32,17 @@ public class ProducerFacturation implements Runnable {
 	public void run() {
 		while (running) {
 			try (JMSContext context = connectionFactory.createContext(Session.AUTO_ACKNOWLEDGE)) {
+				String selector = "type = 'Petit Prêt'";
 
-				Queue requestQueue = context.createQueue("M1.facturation-"+userName);
-				Queue replyQueue = context.createQueue("M1.reply-facturation"+userName);
+				JMSConsumer consumer = context.createConsumer(context.createQueue("M1.serviceDePret-" + userName), selector);
+				Message messPetitPret = consumer.receive();
 
-				TextMessage requestMessage;
-				requestMessage = context.createTextMessage("Facture n° " + random.nextInt(100) + 1);
-				requestMessage.setJMSReplyTo(replyQueue);
+				String petitPretBody = messPetitPret.getBody(String.class);
 
-				context.createProducer().send(requestQueue, requestMessage);
+				System.out.println("Réception d'un petit prêt : " + petitPretBody);
 
-			} catch (JMSException e) {
-				e.printStackTrace();
+			} catch (Exception e) {
+				throw new RuntimeException(e);
 			}
 		}
 	}
